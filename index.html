@@ -1,0 +1,940 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>CEMS Flow Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky control bar, live console (map + chart), then a scroll-driven five-stage flow with a sticky progress rail, ending in a hotspot view. */
+:root{
+  --bg:#f1f5f4; --surface:#fbfdfc; --surface-2:#e8eeec; --ink:#0f1b1a; --ink-2:#47544f; --ink-3:#6b7773;
+  --line:#d5dedb; --grid:#e1e8e6; --accent:#4a3aa7; --accent-ink:#ffffff; --accent-soft:#e6e3f6;
+  --so2:#2a78d6; --nox:#eb6834; --pm:#1baf7a;
+  --good:#0ca30c; --good-ink:#006300; --warn:#fab219; --serious:#ec835a; --crit:#d03b3b;
+  --h0:#cde2fb; --h1:#9ec5f4; --h2:#6da7ec; --h3:#3987e5; --h4:#256abf; --h5:#184f95; --h6:#0d366b;
+  --shadow:0 1px 2px rgba(15,27,26,.06),0 6px 20px rgba(15,27,26,.05);
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0c1211; --surface:#131b1a; --surface-2:#1b2625; --ink:#eef4f2; --ink-2:#b6c3bf; --ink-3:#8b9894;
+    --line:#26322f; --grid:#212b29; --accent:#9085e9; --accent-ink:#0c1211; --accent-soft:#252146;
+    --so2:#3987e5; --nox:#d95926; --pm:#199e70; --good-ink:#0ca30c;
+    --h0:#0d366b; --h1:#184f95; --h2:#256abf; --h3:#3987e5; --h4:#6da7ec; --h5:#9ec5f4; --h6:#cde2fb;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.25); color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0c1211; --surface:#131b1a; --surface-2:#1b2625; --ink:#eef4f2; --ink-2:#b6c3bf; --ink-3:#8b9894;
+  --line:#26322f; --grid:#212b29; --accent:#9085e9; --accent-ink:#0c1211; --accent-soft:#252146;
+  --so2:#3987e5; --nox:#d95926; --pm:#199e70; --good-ink:#0ca30c;
+  --h0:#0d366b; --h1:#184f95; --h2:#256abf; --h3:#3987e5; --h4:#6da7ec; --h5:#9ec5f4; --h6:#cde2fb;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.25); color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--f-display);font-weight:600;letter-spacing:.005em;line-height:1.05;margin:0;text-wrap:balance}
+p{margin:0}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--f-mono)}
+.num{font-variant-numeric:tabular-nums}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px}
+.eyebrow{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+
+/* control bar */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.bar .wrap{display:flex;align-items:center;gap:12px;padding-block:9px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:9px;font-family:var(--f-display);font-weight:700;font-size:20px;letter-spacing:.02em;margin-right:auto}
+.brand svg{width:22px;height:22px}
+.clock{font-family:var(--f-mono);font-size:12px;color:var(--ink-2);display:flex;align-items:center;gap:8px}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 0 0 var(--good);animation:pulse 2s infinite}
+.paused .live-dot{background:var(--ink-3);animation:none}
+@keyframes pulse{70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;font-weight:500;line-height:1.2}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+select.btn{padding-right:8px}
+
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:32px;align-items:end;padding-block:36px 24px}
+.hero h1{font-size:clamp(2.4rem,6.4vw,4.6rem);font-weight:700;margin-top:10px}
+.hero h1 em{font-style:normal;color:var(--accent)}
+.hero .lede{margin-top:16px;max-width:60ch;color:var(--ink-2);font-size:16px}
+.big{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px;box-shadow:var(--shadow)}
+.big .fig{font-family:var(--f-display);font-weight:700;font-size:clamp(3.4rem,8vw,5.2rem);line-height:.95;display:flex;align-items:baseline;gap:8px}
+.big .fig small{font-size:.42em;color:var(--ink-3);font-weight:500}
+.big .cap{color:var(--ink-2);font-size:13px;margin-top:8px}
+.pips{display:flex;gap:5px;margin-top:12px}
+.pips i{flex:1;height:8px;border-radius:2px;background:var(--surface-2)}
+.pips i.w{background:var(--warn)} .pips i.x{background:var(--crit)} .pips i.o{background:var(--good)}
+
+/* controls row */
+.controls{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding-block:14px;border-block:1px solid var(--line)}
+.controls label.lab{font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-right:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer}
+.chip:hover{background:var(--surface-2)}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px}
+.switch input{appearance:none;width:34px;height:20px;border-radius:999px;background:var(--crit);position:relative;cursor:pointer;margin:0;transition:background .2s}
+.switch input::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s}
+.switch input:checked{background:var(--good)}
+.switch input:checked::after{transform:translateX(14px)}
+
+/* tiles */
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}
+.tile .k{font-size:12px;color:var(--ink-2)}
+.tile .v{font-family:var(--f-display);font-weight:700;font-size:30px;line-height:1.1;margin-top:2px}
+.tile .v small{font-size:14px;color:var(--ink-3);font-weight:500;margin-left:3px}
+.tile .d{font-size:12px;color:var(--ink-3);margin-top:2px}
+
+/* cards + console */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow);min-width:0}
+.card h3{font-size:22px;margin-bottom:2px}
+.card .sub{font-size:13px;color:var(--ink-2);margin-bottom:10px}
+.console{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:16px;margin-top:16px}
+svg{display:block;max-width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--ink-2);margin-top:8px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.key{width:16px;height:0;border-top:3px solid currentColor;border-radius:2px;display:inline-block}
+.sw{width:11px;height:11px;border-radius:3px;display:inline-block}
+.chartbox{position:relative}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;box-shadow:var(--shadow);min-width:150px;z-index:5;transform:translate(-50%,0)}
+.tip b{font-size:14px;font-weight:600}
+.tip .r{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:3px}
+.tip .t{color:var(--ink-3);font-family:var(--f-mono);font-size:11px}
+details.tbl{margin-top:10px;font-size:12px}
+details.tbl summary{cursor:pointer;color:var(--accent);font-weight:500}
+.scroll-x{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th,td{text-align:right;padding:4px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--ink-3);font-weight:500}
+
+/* status pill */
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:2px 10px 2px 8px;font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--surface-2);white-space:nowrap}
+.pill.ok{color:var(--good-ink)} .pill.watch{color:var(--ink)} .pill.watch::before{color:var(--warn)}
+.pill.bad{color:var(--crit)} .pill.flag{color:var(--accent)} .pill.mute{color:var(--ink-3)}
+.pill::before{content:"✓";font-weight:700}
+.pill.watch::before{content:"▲"} .pill.bad::before{content:"✕"} .pill.flag::before{content:"◆"} .pill.mute::before{content:"–"}
+
+/* flow */
+.flowhead{padding-block:56px 12px}
+.flowhead h2{font-size:clamp(2rem,5vw,3.2rem);font-weight:700;margin-top:8px}
+.flowhead p{max-width:62ch;color:var(--ink-2);margin-top:10px}
+.flow{display:grid;grid-template-columns:230px minmax(0,1fr);gap:36px;align-items:start}
+.rail{position:sticky;top:calc(env(safe-area-inset-top,0px) + 70px);padding-block:8px}
+.rail ol{list-style:none;margin:0;padding:0;position:relative}
+.rail ol::before{content:"";position:absolute;left:15px;top:14px;bottom:14px;width:2px;background:var(--line)}
+.rail .fill{position:absolute;left:15px;top:14px;width:2px;height:0;background:var(--accent);transition:height .25s}
+.rail .pk{position:absolute;left:12px;top:14px;width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);animation:down 3.2s linear infinite}
+@keyframes down{0%{transform:translateY(0);opacity:0}10%{opacity:1}90%{opacity:1}100%{transform:translateY(var(--rl,260px));opacity:0}}
+.rail li{position:relative;padding:8px 0 8px 44px;cursor:pointer;min-height:56px}
+.rail li .n{position:absolute;left:0;top:8px;width:32px;height:32px;border-radius:50%;background:var(--surface);border:2px solid var(--line);display:grid;place-items:center;font-family:var(--f-mono);font-size:12px;color:var(--ink-3);transition:all .25s}
+.rail li .tt{font-family:var(--f-display);font-weight:600;font-size:19px;line-height:1.1;color:var(--ink-2)}
+.rail li .ss{font-size:12px;color:var(--ink-3);line-height:1.3;margin-top:2px}
+.rail li.on .n{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);transform:scale(1.1)}
+.rail li.on .tt{color:var(--ink)}
+.rail li.done .n{border-color:var(--accent);color:var(--accent)}
+.stages{display:flex;flex-direction:column;gap:28px;min-width:0}
+.stage{scroll-margin-top:90px}
+.stage .tag{display:flex;align-items:center;gap:10px}
+.stage h3.st{font-size:clamp(1.7rem,4vw,2.5rem);font-weight:700;margin-top:6px}
+.stage .desc{max-width:62ch;color:var(--ink-2);margin:8px 0 14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px;min-width:0}
+.row{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center}
+.grow{flex:1;min-width:0}
+input[type=range]{accent-color:var(--accent);width:100%;min-width:140px}
+.rangewrap{display:flex;flex-direction:column;gap:4px;min-width:200px;flex:1}
+.rangewrap .top{display:flex;justify-content:space-between;font-size:13px}
+.rangewrap .top b{font-family:var(--f-mono);font-weight:500}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:6px 14px;cursor:pointer;font-size:13px;font-weight:500}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.code{font-family:var(--f-mono);font-size:12px;background:var(--surface-2);border-radius:10px;padding:12px 14px;overflow-x:auto;white-space:pre;line-height:1.6;color:var(--ink)}
+.gates{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.gate{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0;background:var(--bg)}
+.gate .gh{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.gate .gt{font-family:var(--f-display);font-weight:600;font-size:19px}
+.gate .gr{font-size:12px;color:var(--ink-2)}
+.gate .cnt{font-family:var(--f-mono);font-size:11px;color:var(--ink-3)}
+.verdict{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px dashed var(--line);border-radius:10px;padding:10px 12px;font-size:13px}
+.lanes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.phone{border:1px solid var(--line);border-radius:22px;padding:14px 12px;background:var(--bg);min-height:160px;display:flex;flex-direction:column;gap:8px}
+.bubble{background:var(--surface);border:1px solid var(--line);border-radius:14px 14px 14px 4px;padding:9px 11px;font-size:12.5px;line-height:1.45}
+.alog{display:flex;flex-direction:column;gap:6px;max-height:230px;overflow:auto}
+.alog .a{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:7px 10px;font-size:12.5px}
+.empty{color:var(--ink-3);font-size:13px;padding:10px 2px}
+
+/* hotspot */
+.hot{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-top:16px}
+.rank{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 10px;align-items:center;font-size:12.5px}
+.rank .bar-t{height:14px;background:var(--surface-2);border-radius:3px;position:relative}
+.rank .bar-t i{position:absolute;left:0;top:0;bottom:0;border-radius:0 4px 4px 0;background:var(--h4)}
+.cov{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px 12px;align-items:center;font-size:13px}
+.cov .track{height:16px;background:var(--surface-2);border-radius:3px;position:relative}
+.cov .track i{position:absolute;left:0;top:0;bottom:0;border-radius:0 4px 4px 0}
+.note{font-size:12px;color:var(--ink-3);padding-block:32px 56px;max-width:80ch}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.unit{cursor:pointer}
+.unit:focus-visible rect.plot{stroke:var(--accent);stroke-width:3}
+
+/* responsive */
+@media (max-width:980px){
+  .hero{grid-template-columns:minmax(0,1fr);gap:20px}
+  .console{grid-template-columns:minmax(0,1fr)}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .flow{grid-template-columns:minmax(0,1fr);gap:0}
+  .rail{top:calc(env(safe-area-inset-top,0px) + 56px);z-index:20;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);padding:8px 0;border-bottom:1px solid var(--line)}
+  .rail ol{display:flex;justify-content:space-between;gap:4px}
+  .rail ol::before,.rail .fill,.rail .pk{display:none}
+  .rail li{padding:0;min-height:0;flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px}
+  .rail li .n{position:static}
+  .rail li .tt{font-size:12px;font-family:var(--f-body);font-weight:500}
+  .rail li .ss{display:none}
+  .stages{padding-top:20px}
+}
+@media (max-width:720px){
+  .gates,.lanes{grid-template-columns:minmax(0,1fr)}
+  .rail li .tt{font-size:11px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  html{scroll-behavior:auto}
+}
+</style>
+<div id="app">
+<header class="bar" id="bar">
+  <div class="wrap">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21V9l3-1v13z" fill="currentColor"/><path d="M13 21V6l3-1v16z" fill="currentColor" opacity=".55"/><circle cx="18" cy="4.5" r="2.2" fill="var(--accent)"/><circle cx="21" cy="8" r="1.4" fill="var(--accent)" opacity=".6"/></svg>
+      CEMS Flow Console
+    </div>
+    <div class="clock"><span class="live-dot"></span><span id="clock">--</span></div>
+    <button class="btn primary" id="playBtn" type="button">Pause</button>
+    <label class="sr" for="speed">Simulation speed</label>
+    <select class="btn" id="speed"><option value="1">1× speed</option><option value="2" selected>2× speed</option><option value="4">4× speed</option><option value="8">8× speed</option></select>
+    <button class="btn" id="resetBtn" type="button">Reset</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <div>
+      <div class="eyebrow">Continuous Emission Monitoring · Industrial area, 8 stacks</div>
+      <h1>Find the stacks that break the limit, <em>and when</em>.</h1>
+      <p class="lede">Measure continuously and you can see where and when exceedances happen. Regulators then send inspections and corrective action to the actual problem stacks, instead of treating the whole industrial area as if everyone is exposed in the same way.</p>
+    </div>
+    <div class="big" aria-live="polite">
+      <div class="eyebrow">Right now</div>
+      <div class="fig"><span id="heroCount">0</span><small>of <span id="heroTotal">8</span> stacks over limit</small></div>
+      <div class="pips" id="heroPips"></div>
+      <div class="cap" id="heroCap">Simulated live feed. Limits are illustrative.</div>
+    </div>
+  </section>
+
+  <section aria-label="Simulation controls" class="controls">
+    <div><label class="lab" for="unitSel">Stack</label><select class="btn" id="unitSel"></select></div>
+    <div class="row" style="gap:6px"><span class="lab eyebrow">Scenario</span>
+      <div class="chips" id="scen" role="group" aria-label="Scenario for the selected stack">
+        <button class="chip" type="button" data-mode="normal" aria-pressed="true">Normal operation</button>
+        <button class="chip" type="button" data-mode="upset" aria-pressed="false">Process upset</button>
+        <button class="chip" type="button" data-mode="frozen" aria-pressed="false">Frozen reading</button>
+        <button class="chip" type="button" data-mode="spoof" aria-pressed="false">Spoofed low readings</button>
+      </div>
+    </div>
+    <label class="switch"><input type="checkbox" id="linkSw" checked><span id="linkLbl">Uplink connected</span></label>
+  </section>
+
+  <div class="tiles">
+    <div class="tile"><div class="k">Worst parameter, selected stack</div><div class="v num"><span id="tWorst">0</span><small>% of limit</small></div><div class="d" id="tWorstD">–</div></div>
+    <div class="tile"><div class="k">Continuous over-limit time</div><div class="v num"><span id="tConsec">0</span><small>min</small></div><div class="d" id="tConsecD">–</div></div>
+    <div class="tile"><div class="k">Records at the board, selected stack</div><div class="v num"><span id="tRec">0</span></div><div class="d" id="tRecD">–</div></div>
+    <div class="tile"><div class="k">Alerts raised, all stacks</div><div class="v num"><span id="tAlerts">0</span></div><div class="d" id="tAlertsD">–</div></div>
+  </div>
+
+  <div class="console">
+    <div class="card">
+      <h3>Industrial area</h3>
+      <div class="sub">Schematic layout. Select a stack to follow it below.</div>
+      <svg id="mapSvg" viewBox="0 0 480 330" role="img" aria-label="Schematic map of eight stacks coloured by current compliance status"></svg>
+      <div class="legend" id="mapLegend">
+        <span><b class="pill ok">Within limit</b></span><span><b class="pill watch">Watch, 85% or more</b></span><span><b class="pill bad">Over limit</b></span><span><b class="pill flag">Data flag</b></span>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Live emissions, last 6 hours</h3>
+      <div class="sub" id="chartSub">Each parameter shown as a share of its limit, so one axis fits all three.</div>
+      <div class="legend" id="chartLegend" style="margin:0 0 6px">
+        <span style="color:var(--so2)"><i class="key"></i><span style="color:var(--ink-2)">SO₂</span></span>
+        <span style="color:var(--nox)"><i class="key"></i><span style="color:var(--ink-2)">NOₓ</span></span>
+        <span style="color:var(--pm)"><i class="key"></i><span style="color:var(--ink-2)">PM</span></span>
+        <span style="color:var(--crit)"><i class="key"></i><span style="color:var(--ink-2)">Limit (100%)</span></span>
+      </div>
+      <div class="chartbox" id="chartBox">
+        <svg id="chartSvg" viewBox="0 0 720 300" role="img" aria-label="Line chart of SO2, NOx and PM as percent of limit for the selected stack"></svg>
+        <div class="tip" id="chartTip" hidden></div>
+      </div>
+      <details class="tbl"><summary>Table view</summary>
+        <div class="scroll-x"><table><thead><tr><th>Time</th><th>SO₂ mg/Nm³</th><th>NOₓ mg/Nm³</th><th>PM mg/Nm³</th><th>Status</th></tr></thead><tbody id="tblBody"></tbody></table></div>
+      </details>
+    </div>
+  </div>
+
+  <section class="flowhead">
+    <div class="eyebrow">How the data travels</div>
+    <h2>From the stack to the enforcement notice, in five stages</h2>
+    <p>Scroll through the flow. Each stage is wired to the same simulated stack you selected above, so changing the scenario changes what you see at every step.</p>
+  </section>
+
+  <div class="flow" id="flow">
+    <nav class="rail" aria-label="Flow stages">
+      <ol id="railList">
+        <span class="fill" id="railFill"></span><span class="pk" id="railPk"></span>
+        <li data-stage="1"><span class="n">1</span><div class="tt">At the stack</div><div class="ss">CEMS analysers on the stack</div></li>
+        <li data-stage="2"><span class="n">2</span><div class="tt">IoT data logger</div><div class="ss">Tamper-proof, stores locally</div></li>
+        <li data-stage="3"><span class="n">3</span><div class="tt">Transmission</div><div class="ss">Encrypted to the board</div></li>
+        <li data-stage="4"><span class="n">4</span><div class="tt">Board validation</div><div class="ss">Three tiers of checks</div></li>
+        <li data-stage="5"><span class="n">5</span><div class="tt">Enforcement loop</div><div class="ss">SMS and e-mail alerts</div></li>
+      </ol>
+    </nav>
+
+    <div class="stages">
+      <section class="stage" id="s1" data-stage="1">
+        <div class="tag"><span class="pill mute">Stage 1 of 5</span></div>
+        <h3 class="st">Install CEMS directly on the stack</h3>
+        <p class="desc">Industry installs the Continuous Emission Monitoring System on each emission stack. Analysers read dust, SO₂ and NOₓ in the flue gas and give out a standard 4–20 mA signal. Raise the production load and watch the plume and the signals follow.</p>
+        <div class="panel">
+          <svg id="stackSvg" viewBox="0 0 640 300" role="img" aria-label="Stack with a probe feeding three analysers whose outputs are 4 to 20 milliamp signals">
+            <defs>
+              <linearGradient id="chim" x1="0" x2="1"><stop offset="0" stop-color="var(--surface-2)"/><stop offset="1" stop-color="var(--line)"/></linearGradient>
+            </defs>
+            <line x1="0" y1="280" x2="640" y2="280" stroke="var(--line)" stroke-width="2"/>
+            <g id="plume"></g>
+            <path d="M70 280 L82 70 L128 70 L140 280 Z" fill="url(#chim)" stroke="var(--ink-3)" stroke-width="1.5"/>
+            <rect x="78" y="56" width="58" height="16" rx="3" fill="var(--ink-2)"/>
+            <rect x="96" y="150" width="22" height="14" rx="2" fill="var(--accent)"/>
+            <text x="107" y="184" text-anchor="middle" font-size="11" fill="var(--ink-2)" font-family="var(--f-mono)">probe</text>
+            <path d="M118 157 H300" stroke="var(--accent)" stroke-width="2.5" fill="none"/>
+            <g id="gasdots"></g>
+            <rect x="300" y="64" width="324" height="208" rx="12" fill="var(--bg)" stroke="var(--ink-3)" stroke-width="1.5"/>
+            <text x="316" y="88" font-size="11" letter-spacing="1.4" fill="var(--ink-3)" font-family="var(--f-mono)">ANALYSER CABINET</text>
+            <g font-family="var(--f-mono)" font-size="12">
+              <g transform="translate(316 104)"><text y="12" fill="var(--ink)" font-family="var(--f-body)" font-weight="600">SO₂ analyser</text><rect y="22" width="292" height="14" rx="3" fill="var(--surface-2)"/><rect id="b-so2" y="22" width="0" height="14" rx="3" fill="var(--so2)"/><line id="lim-so2" x1="195" x2="195" y1="18" y2="40" stroke="var(--crit)" stroke-width="2"/><text id="ma-so2" y="56" fill="var(--ink-2)">4.0 mA</text><text id="v-so2" x="292" y="56" text-anchor="end" fill="var(--ink-2)">0 mg/Nm³</text></g>
+              <g transform="translate(316 168)"><text y="12" fill="var(--ink)" font-family="var(--f-body)" font-weight="600">NOₓ analyser</text><rect y="22" width="292" height="14" rx="3" fill="var(--surface-2)"/><rect id="b-nox" y="22" width="0" height="14" rx="3" fill="var(--nox)"/><line x1="195" x2="195" y1="18" y2="40" stroke="var(--crit)" stroke-width="2"/><text id="ma-nox" y="56" fill="var(--ink-2)">4.0 mA</text><text id="v-nox" x="292" y="56" text-anchor="end" fill="var(--ink-2)">0 mg/Nm³</text></g>
+              <g transform="translate(316 232)"><text y="12" fill="var(--ink)" font-family="var(--f-body)" font-weight="600">Dust (PM) monitor</text><rect y="22" width="292" height="14" rx="3" fill="var(--surface-2)"/><rect id="b-pm" y="22" width="0" height="14" rx="3" fill="var(--pm)"/><line x1="195" x2="195" y1="18" y2="40" stroke="var(--crit)" stroke-width="2"/><text id="ma-pm" y="56" fill="var(--ink-2)">4.0 mA</text><text id="v-pm" x="292" y="56" text-anchor="end" fill="var(--ink-2)">0 mg/Nm³</text></g>
+            </g>
+          </svg>
+          <div class="legend"><span><i class="sw" style="background:var(--crit)"></i>Limit marker (analyser range runs to 150% of limit)</span><span>Signal: 4 mA = zero, 20 mA = top of range</span></div>
+          <div class="row">
+            <div class="rangewrap"><div class="top"><label for="loadSlider">Production load</label><b id="loadVal">80%</b></div><input type="range" id="loadSlider" min="30" max="100" value="80"></div>
+            <label class="switch"><input type="checkbox" id="loadAuto" checked><span>Let the load drift on its own</span></label>
+          </div>
+        </div>
+      </section>
+
+      <section class="stage" id="s2" data-stage="2">
+        <div class="tag"><span class="pill mute">Stage 2 of 5</span></div>
+        <h3 class="st">An IoT logger turns analyser output into data</h3>
+        <p class="desc">The CEMS carries an IoT device that converts the analyser signals into digital data. It is tamper-proof: unalterable firmware is mandatory, and it logs data locally if the connection is lost. That prevents “accidental” data gaps. Cut the uplink and restore it to see the stored records go out.</p>
+        <div class="panel">
+          <svg id="logSvg" viewBox="0 0 640 170" role="img" aria-label="Analyser to IoT logger to uplink, with a local buffer">
+            <rect x="12" y="40" width="130" height="80" rx="10" fill="var(--bg)" stroke="var(--ink-3)" stroke-width="1.5"/>
+            <text x="77" y="76" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Analysers</text>
+            <text x="77" y="96" text-anchor="middle" font-size="11" fill="var(--ink-3)" font-family="var(--f-mono)">4–20 mA</text>
+            <path d="M142 80 H214" stroke="var(--accent)" stroke-width="2.5"/><path d="M208 74 L218 80 L208 86" fill="none" stroke="var(--accent)" stroke-width="2.5"/>
+            <rect x="218" y="18" width="220" height="124" rx="12" fill="var(--surface-2)" stroke="var(--accent)" stroke-width="2"/>
+            <text x="238" y="44" font-size="13" font-weight="600" fill="var(--ink)">IoT data logger</text>
+            <g transform="translate(396 28)"><rect x="0" y="9" width="20" height="14" rx="3" fill="var(--accent)"/><path d="M4 9 V5 a6 6 0 0 1 12 0 V9" fill="none" stroke="var(--accent)" stroke-width="2.4"/></g>
+            <text x="238" y="62" font-size="11" fill="var(--ink-3)" font-family="var(--f-mono)">locked firmware · no edits</text>
+            <text x="238" y="86" font-size="11" fill="var(--ink-2)">Local buffer</text>
+            <rect x="238" y="94" width="180" height="12" rx="3" fill="var(--bg)"/><rect id="bufFill" x="238" y="94" width="0" height="12" rx="3" fill="var(--serious)"/>
+            <text id="bufTxt" x="238" y="126" font-size="11" fill="var(--ink-2)" font-family="var(--f-mono)">0 records waiting</text>
+            <path d="M438 80 H520" stroke="var(--ink-3)" stroke-width="2.5" id="uplinkLine"/>
+            <circle id="linkLed" cx="480" cy="80" r="7" fill="var(--good)"/>
+            <text id="linkTxt" x="480" y="108" text-anchor="middle" font-size="11" fill="var(--ink-2)" font-family="var(--f-mono)">uplink up</text>
+            <rect x="520" y="40" width="108" height="80" rx="10" fill="var(--bg)" stroke="var(--ink-3)" stroke-width="1.5"/>
+            <text x="574" y="76" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">SPCB</text><text x="574" y="96" text-anchor="middle" font-size="11" fill="var(--ink-3)" font-family="var(--f-mono)">board server</text>
+          </svg>
+          <div>
+            <div class="eyebrow" style="margin-bottom:6px">Last 36 readings, one every 5 minutes</div>
+            <svg id="strip" viewBox="0 0 648 40" role="img" aria-label="Timeline of recent readings: live, held in the buffer, or backfilled after reconnecting"></svg>
+            <div class="legend"><span><i class="sw" style="background:var(--h4)"></i>Sent live</span><span><i class="sw" style="background:repeating-linear-gradient(45deg,var(--serious) 0 3px,transparent 3px 6px);border:1px solid var(--serious)"></i>Held on the logger</span><span><i class="sw" style="border:2px solid var(--h4)"></i>Sent after reconnecting, nothing lost</span></div>
+          </div>
+          <div class="row"><button class="btn primary" id="linkBtn" type="button">Cut the uplink</button><span class="cnt mono" id="linkNote" style="font-size:12px;color:var(--ink-3)">Uplink is carrying data.</span></div>
+        </div>
+      </section>
+
+      <section class="stage" id="s3" data-stage="3">
+        <div class="tag"><span class="pill mute">Stage 3 of 5</span></div>
+        <h3 class="st">Data goes to the State Pollution Control Board</h3>
+        <p class="desc">Records travel to the State Pollution Control Board (SPCB) servers over encrypted HTTPS/REST APIs or the MQTT protocol. Pick a protocol to see the same reading packaged each way.</p>
+        <div class="panel">
+          <div class="row"><div class="seg" id="protoSeg" role="group" aria-label="Transmission protocol"><button type="button" data-p="rest" aria-pressed="true">HTTPS / REST</button><button type="button" data-p="mqtt" aria-pressed="false">MQTT</button></div><span class="eyebrow" id="protoNote">POST every 5 minutes over TLS</span></div>
+          <svg id="transSvg" viewBox="0 0 640 150" role="img" aria-label="Logger sending encrypted packets across the internet to the board cloud"></svg>
+          <div class="code" id="payload" aria-live="off"></div>
+        </div>
+      </section>
+
+      <section class="stage" id="s4" data-stage="4">
+        <div class="tag"><span class="pill mute">Stage 4 of 5</span></div>
+        <h3 class="st">The board cloud checks every record in three tiers</h3>
+        <p class="desc">Transmitted data passes through government cloud servers and three tiers of validation. Try the scenarios in the control row: a frozen reading trips Tier 1, a process upset trips Tier 2, and spoofed low readings trip Tier 3.</p>
+        <div class="panel">
+          <div class="gates">
+            <div class="gate"><div class="gh"><span class="gt">Tier 1 · Technical</span><span class="pill ok" id="pA">Complete</span></div><div class="gr">Checks completeness, and whether data is frozen. A frozen feed is excused when the analyser is under maintenance.</div><svg id="vA" viewBox="0 0 240 36" role="img" aria-label="Last 24 records: complete, frozen or missing"></svg><div class="cnt" id="cA">–</div><label class="switch"><input type="checkbox" id="maint"><span>Analyser under maintenance</span></label></div>
+            <div class="gate"><div class="gh"><span class="gt">Tier 2 · Limit</span><span class="pill ok" id="pB">Within limit</span></div><div class="gr">Checks SO₂, NOₓ and PM against the standard. A breach puts the stack in the warning stage.</div><svg id="vB" viewBox="0 0 240 70" role="img" aria-label="Worst parameter against the limit"></svg><div class="cnt" id="cB">–</div></div>
+            <div class="gate"><div class="gh"><span class="gt">Tier 3 · Statistical</span><span class="pill ok" id="pC">Plausible</span></div><div class="gr">AI algorithms compare current data with historical trends and production capacity to spot data spoofing.</div><svg id="vC" viewBox="0 0 240 70" role="img" aria-label="Reported emissions against the level expected for the production load"></svg><div class="cnt" id="cC">–</div></div>
+          </div>
+          <div class="verdict" id="verdict" aria-live="polite"></div>
+          <div class="legend"><span><i class="key" style="color:var(--ink)"></i>Reported</span><span><i class="key" style="color:var(--accent)"></i>Expected for current load and history</span></div>
+        </div>
+      </section>
+
+      <section class="stage" id="s5" data-stage="5">
+        <div class="tag"><span class="pill mute">Stage 5 of 5</span></div>
+        <h3 class="st">The enforcement loop alerts the people who must act</h3>
+        <p class="desc">If an industry exceeds the standard for a set window, for example more than 2 hours, the system generates an SMS or e-mail alert to the concerned people. Force a process upset on a stack and watch the clock fill. Change the window to see how soon the alert fires.</p>
+        <div class="panel">
+          <div class="row" style="align-items:stretch">
+            <div style="flex:0 0 190px;display:grid;place-items:center"><svg id="ring" viewBox="0 0 180 180" width="180" height="180" role="img" aria-label="Progress of continuous over-limit time towards the alert window"></svg></div>
+            <div class="grow" style="display:flex;flex-direction:column;gap:12px;justify-content:center">
+              <div class="rangewrap"><div class="top"><label for="winSlider">Alert window</label><b id="winVal">2 h</b></div><input type="range" id="winSlider" min="30" max="240" step="30" value="120"></div>
+              <div class="row" style="gap:10px"><span class="pill ok" id="enfState">Clear</span><span style="font-size:13px;color:var(--ink-2)" id="enfNote">No continuous exceedance on this stack.</span></div>
+              <div style="font-size:12.5px;color:var(--ink-2)"><b>Who is told:</b> the industry’s environment officer, the SPCB regional officer and the inspection team.</div>
+            </div>
+          </div>
+          <div class="lanes">
+            <div><div class="eyebrow" style="margin-bottom:6px">Message preview</div>
+              <div class="seg" id="msgSeg" style="margin-bottom:8px"><button type="button" data-m="sms" aria-pressed="true">SMS</button><button type="button" data-m="mail" aria-pressed="false">E-mail</button></div>
+              <div class="phone" id="msgBody"></div></div>
+            <div><div class="eyebrow" style="margin-bottom:6px">Alert log, all stacks</div><div class="alog" id="alog"></div></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="flowhead" style="padding-top:64px">
+    <div class="eyebrow">What the data is for</div>
+    <h2>Aim inspections where the exceedances are</h2>
+    <p>Twenty-four hours of readings for every stack, built from the same feed. Darker cells mean emissions closer to or above the limit.</p>
+  </section>
+  <div class="hot">
+    <div class="card"><h3>Hour by hour, stack by stack</h3><div class="sub">Highest reading in each hour, as a share of the limit. A red dot marks an hour with a breach.</div>
+      <div class="scroll-x"><svg id="heat" viewBox="0 0 760 270" style="min-width:560px" role="img" aria-label="Heat map of the highest percent of limit per stack per hour over 24 hours"></svg></div>
+      <div class="legend" id="heatLegend"></div>
+    </div>
+    <div class="console" style="margin-top:0">
+      <div class="card"><h3>Minutes over limit, last 24 h</h3><div class="sub" id="rankSub">Ranked by stack.</div><div class="rank" id="rank"></div></div>
+      <div class="card"><h3>How far do your inspectors reach?</h3><div class="sub">Compare inspecting stacks at random with inspecting the worst ones first.</div>
+        <div class="rangewrap" style="margin-bottom:12px"><div class="top"><label for="teams">Stacks you can inspect this week</label><b id="teamsVal">2</b></div><input type="range" id="teams" min="1" max="8" value="2"></div>
+        <div class="cov"><span>Blanket</span><div class="track"><i id="covB" style="background:var(--ink-3);width:0"></i></div><b class="num" id="covBt">0%</b>
+          <span>Targeted</span><div class="track"><i id="covT" style="background:var(--accent);width:0"></i></div><b class="num" id="covTt">0%</b></div>
+        <p style="font-size:13px;color:var(--ink-2);margin-top:12px" id="takeaway"></p>
+      </div>
+    </div>
+  </div>
+  <p class="note">This console runs on simulated data. The stacks, limits (SO₂ 200, NOₓ 300, PM 50 mg/Nm³) and the 5-minute reporting interval are illustrative, not any plant’s consent conditions or a regulator’s notified standards. The Tier 3 model is shown as a simple comparison against the stack’s own history and production load.</p>
+</main>
+</div>
+<script>
+/* ---------- Simulation engine (no DOM) ---------- */
+const CEMS=(function(){
+'use strict';
+const LIM={so2:200,nox:300,pm:50}, P=['so2','nox','pm'], NM={so2:'SO₂',nox:'NOₓ',pm:'PM'};
+const TICK=5, HIST=288;
+const rnd=(a,b)=>a+Math.random()*(b-a), ri=(a,b)=>Math.floor(rnd(a,b+1)), cl=(x,a,b)=>Math.max(a,Math.min(b,x));
+const DEFS=[
+ {id:'S1',name:'Cement kiln',col:0,row:0,base:{so2:.46,nox:.62,pm:.58},prone:.001},
+ {id:'S2',name:'Thermal boiler',col:1,row:0,base:{so2:.62,nox:.70,pm:.55},prone:.004},
+ {id:'S3',name:'Steel furnace',col:2,row:0,base:{so2:.50,nox:.64,pm:.66},prone:.012},
+ {id:'S4',name:'Dyeing boiler',col:3,row:0,base:{so2:.40,nox:.55,pm:.45},prone:.001},
+ {id:'S5',name:'Incinerator',col:0,row:1,base:{so2:.35,nox:.50,pm:.40},prone:.001},
+ {id:'S6',name:'Smelter',col:1,row:1,base:{so2:.72,nox:.58,pm:.74},prone:.025},
+ {id:'S7',name:'Paper boiler',col:2,row:1,base:{so2:.44,nox:.52,pm:.50},prone:.0015},
+ {id:'S8',name:'Fertiliser plant',col:3,row:1,base:{so2:.55,nox:.60,pm:.35},prone:.002}
+];
+const S={units:[],sel:null,t:0,ticks:0,win:120,alerts:[],alertTotal:0,alertSeq:0};
+
+function mkUnit(d){return Object.assign({},d,{load:rnd(.65,.9),loadManual:null,mode:'normal',forced:false,left:0,mag:null,ramp:0,
+  link:true,fz:null,maint:false,hist:[],buffer:[],consec:0,cool:0,alertOn:false,susp:0,integOn:false,count:0,flushed:0,flushTick:-99});}
+function chooseMag(){const ps=P.slice().sort(()=>Math.random()-.5).slice(0,2),m={};ps.forEach(p=>m[p]=rnd(1.2,1.6));return m;}
+function lastPct(u){for(let i=u.hist.length-1;i>=0;i--){const r=u.hist[i];if(!r.missing&&r.pct)return Object.assign({},r.pct);}return null;}
+
+function trueVals(u){
+  const k=.6+.5*u.load,o={};
+  P.forEach(p=>{o[p]=u.base[p]*k*(1+rnd(-.05,.05));});
+  const hot=u.mode==='upset'||u.mode==='spoof';
+  u.ramp=cl(u.ramp+(hot?.3:-.35),0,1);
+  if(u.ramp>0&&u.mag)P.forEach(p=>{if(u.mag[p])o[p]=o[p]+(u.mag[p]-o[p])*u.ramp;});
+  return o;
+}
+function reported(u,tv){
+  if(u.mode==='frozen'){if(!u.fz)u.fz=lastPct(u)||Object.assign({},tv);return Object.assign({},u.fz);}
+  u.fz=null;
+  if(u.mode==='spoof'){const o={};P.forEach(p=>{o[p]=tv[p]*.2*(1+rnd(-.04,.04));});return o;}
+  return tv;
+}
+
+function raise(u,type,rec){
+  const a={id:++S.alertSeq,t:rec.t,uid:u.id,uname:u.name,type:type,worst:rec.worst,mx:rec.mx,min:u.consec*TICK,win:S.win,late:!!rec.backfilled};
+  S.alerts.unshift(a);if(S.alerts.length>40)S.alerts.pop();S.alertTotal++;
+}
+
+function evaluate(u,rec,silent){
+  const h=u.hist,i=h.lastIndexOf(rec);
+  const w=h.slice(Math.max(0,i-5),i+1).filter(r=>!r.missing);
+  const fr=w.length===6&&w.every(r=>P.every(p=>r.pct[p]===w[0].pct[p]));
+  rec.A=fr?(u.maint?'maint':'frozen'):'ok';
+  let mx=0,wp=null;P.forEach(p=>{if(rec.pct[p]>mx){mx=rec.pct[p];wp=p;}});
+  rec.mx=mx;rec.worst=wp;rec.B=mx>1?'exceed':mx>=.85?'watch':'ok';
+  const k=.6+.5*rec.load;let e=0;P.forEach(p=>{e+=u.base[p];});
+  rec.exp=(e/3)*k;rec.act=(rec.pct.so2+rec.pct.nox+rec.pct.pm)/3;rec.ratio=rec.act/rec.exp;
+  const l4=h.slice(Math.max(0,i-3),i+1).filter(r=>!r.missing);
+  rec.C=(l4.length===4&&rec.load>.55&&l4.every(r=>r.ratio<.6))?'suspect':'ok';
+  if(rec.B==='exceed'){u.consec++;u.cool=0;}else{u.cool++;if(u.cool>=2){u.consec=0;u.alertOn=false;}}
+  rec.consec=u.consec;
+  if(rec.C==='suspect')u.susp++;else{u.susp=0;u.integOn=false;}
+  if(u.consec*TICK>=S.win&&!u.alertOn){u.alertOn=true;if(!silent)raise(u,'exceed',rec);}
+  if(u.susp>=6&&!u.integOn){u.integOn=true;if(!silent)raise(u,'integrity',rec);}
+  u.count++;
+}
+
+function stepUnit(u,silent){
+  if(u.loadManual!=null)u.load=cl(u.loadManual+rnd(-.015,.015),.2,1);
+  else u.load=cl(u.load+rnd(-.04,.04),.45,1);
+  if(u!==S.sel&&!u.forced){
+    if(u.mode==='normal'&&Math.random()<u.prone){u.mode='upset';u.left=ri(8,40);u.mag=chooseMag();}
+    else if(u.mode==='upset'){u.left--;if(u.left<=0)u.mode='normal';}
+  }
+  const tv=trueVals(u),rep=reported(u,tv),raw={};
+  P.forEach(p=>{raw[p]=rep[p]*LIM[p];});
+  const rec={t:S.t,load:u.load,pct:rep,truePct:tv,raw:raw,mode:u.mode,missing:false,backfilled:false};
+  u.hist.push(rec);if(u.hist.length>HIST)u.hist.shift();
+  if(!u.link){rec.missing=true;u.buffer.push(rec);if(u.buffer.length>HIST)u.buffer.shift();}
+  else evaluate(u,rec,silent);
+}
+
+function tick(silent){S.units.forEach(u=>stepUnit(u,!!silent));S.t+=TICK*60000;S.ticks++;}
+
+function setMode(u,m){
+  u.mode=m;u.forced=m!=='normal';u.fz=null;
+  if(m==='upset'||m==='spoof'){const ps=m==='spoof'?['so2','pm']:['so2','pm'];u.mag={};ps.forEach(p=>{u.mag[p]=rnd(1.3,1.5);});}
+}
+function setLink(u,on){
+  if(on&&!u.link){
+    u.link=true;const b=u.buffer;u.buffer=[];
+    b.forEach(r=>{r.missing=false;r.backfilled=true;evaluate(u,r,false);});
+    u.flushed=b.length;u.flushTick=S.ticks;
+  }else if(!on)u.link=false;
+}
+function selectUnit(id){
+  const prev=S.sel,next=S.units.find(u=>u.id===id)||S.units[2];
+  if(prev&&prev!==next){setLink(prev,true);if(prev.forced){prev.forced=false;prev.mode='normal';prev.fz=null;}prev.loadManual=null;}
+  S.sel=next;if(next.mode!=='normal')next.forced=true;
+  return next;
+}
+function latest(u){for(let i=u.hist.length-1;i>=0;i--){if(!u.hist[i].missing)return u.hist[i];}return null;}
+function status(u){
+  const r=latest(u);if(!r)return{state:'nodata',flag:null};
+  let flag=null;if(r.A==='frozen')flag='Frozen data';else if(r.C==='suspect')flag='Possible spoofing';else if(!u.link)flag='Offline, buffering';
+  return{state:r.B,flag:flag,rec:r};
+}
+function exceedMin(u){let n=0;u.hist.forEach(r=>{if(!r.missing&&r.B==='exceed')n++;});return n*TICK;}
+function hourly(u){
+  const out=[],n=u.hist.length,start=n-HIST;
+  for(let k=0;k<24;k++){let mx=0,br=false,has=false;
+    for(let j=0;j<12;j++){const r=u.hist[start+k*12+j];if(!r||r.missing)continue;has=true;if(r.mx>mx)mx=r.mx;if(r.B==='exceed')br=true;}
+    out.push({mx:mx,breach:br,has:has,t:(u.hist[start+k*12]||{}).t});}
+  return out;
+}
+function init(){
+  S.units=DEFS.map(mkUnit);S.sel=null;S.alerts=[];S.alertTotal=0;S.alertSeq=0;S.ticks=0;S.win=120;
+  const now=Math.floor(Date.now()/300000)*300000;S.t=now-HIST*TICK*60000;
+  for(let i=0;i<HIST;i++){
+    if(i===HIST-8){const hot=S.units[5];if(hot.mode!=='upset'){hot.mode='upset';hot.left=ri(24,34);hot.mag=chooseMag();}}
+    tick(true);
+  }
+  S.ticks=0;
+  selectUnit('S3');
+}
+init();
+return{S:S,P:P,NM:NM,LIM:LIM,TICK:TICK,HIST:HIST,tick:tick,setMode:setMode,setLink:setLink,selectUnit:selectUnit,status:status,latest:latest,exceedMin:exceedMin,hourly:hourly,reset:init,evaluate:evaluate};
+})();
+/* ---------- UI: shared helpers and console ---------- */
+const C=CEMS,S=C.S,P=C.P,NM=C.NM,LIM=C.LIM,TICK=C.TICK;
+const $=id=>document.getElementById(id);
+const ui={running:true,speed:2,hover:null,proto:'rest',msg:'sms',vis:{},timer:null,stage:1};
+const fmtT=t=>new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+const fmtDT=t=>new Date(t).toLocaleString([],{weekday:'short',hour:'2-digit',minute:'2-digit'});
+const pct=v=>Math.round(v*100);
+const STC={exceed:'var(--crit)',watch:'var(--warn)',ok:'var(--good)',nodata:'var(--ink-3)'};
+const STL={exceed:'Over limit',watch:'Watch',ok:'Within limit',nodata:'No data'};
+const STP={exceed:'bad',watch:'watch',ok:'ok',nodata:'mute'};
+function setPill(el,cls,txt){el.className='pill '+cls;el.textContent=txt;}
+function sel(){return S.sel;}
+
+function renderBar(){
+  $('clock').textContent=fmtDT(S.t-TICK*60000)+' · simulated';
+  let over=0,pips='';
+  S.units.forEach(u=>{const st=C.status(u).state;if(st==='exceed')over++;pips+='<i class="'+(st==='exceed'?'x':st==='watch'?'w':'o')+'" title="'+u.id+'"></i>';});
+  $('heroCount').textContent=over;$('heroTotal').textContent=S.units.length;$('heroPips').innerHTML=pips;
+  const names=S.units.filter(u=>C.status(u).state==='exceed').map(u=>u.id+' '+u.name);
+  $('heroCap').textContent=names.length?names.join(', ')+' over limit.':'No stack over limit. Pick a scenario to cause one.';
+}
+
+function renderTiles(){
+  const u=sel(),r=C.latest(u);if(!r)return;
+  $('tWorst').textContent=pct(r.mx);
+  $('tWorstD').textContent=NM[r.worst]+' '+r.raw[r.worst].toFixed(1)+' of '+LIM[r.worst]+' mg/Nm³';
+  $('tConsec').textContent=u.consec*TICK;
+  $('tConsecD').textContent=u.consec>0?('Alert fires at '+S.win+' min'):'Not over limit';
+  $('tRec').textContent=u.count;
+  $('tRecD').textContent=u.buffer.length?(u.buffer.length+' held on the logger'):'Every record delivered';
+  $('tAlerts').textContent=S.alertTotal;
+  const a=S.alerts[0];$('tAlertsD').textContent=a?('Latest: '+a.uid+', '+(a.type==='exceed'?'exceedance':'data integrity')):'None yet this session';
+}
+
+function renderMap(){
+  let s='<rect x="0" y="0" width="480" height="330" rx="10" fill="var(--bg)"/>';
+  s+='<rect x="0" y="146" width="480" height="38" fill="var(--surface-2)"/><line x1="0" y1="165" x2="480" y2="165" stroke="var(--line)" stroke-width="2" stroke-dasharray="10 8"/>';
+  S.units.forEach(u=>{
+    const st=C.status(u),r=st.rec,x=10+u.col*118,y=u.row?192:20,w=108,h=120,col=STC[st.state],on=u===sel();
+    const mx=r?r.mx:0,icon=st.state==='exceed'?'✕':st.state==='watch'?'▲':'✓';
+    s+='<g class="unit" tabindex="0" role="button" data-id="'+u.id+'" aria-label="'+u.id+' '+u.name+', '+STL[st.state]+', '+pct(mx)+' percent of limit'+(st.flag?', '+st.flag:'')+'">';
+    if(on)s+='<rect x="'+(x-4)+'" y="'+(y-4)+'" width="'+(w+8)+'" height="'+(h+8)+'" rx="13" fill="none" stroke="var(--accent)" stroke-width="3"/>';
+    s+='<rect class="plot" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="10" fill="color-mix(in srgb,'+col+' 14%,var(--surface))" stroke="'+col+'" stroke-width="1.5"/>';
+    const cx=x+w-30,by=y+h-12,ty=y+46;
+    s+='<path d="M'+(cx-9)+' '+by+' L'+(cx-5)+' '+ty+' L'+(cx+5)+' '+ty+' L'+(cx+9)+' '+by+' Z" fill="var(--ink-3)" opacity=".7"/>';
+    const pr=4+mx*7;
+    s+='<circle cx="'+(cx+2)+'" cy="'+(ty-8)+'" r="'+pr.toFixed(1)+'" fill="var(--ink-3)" opacity=".45"/><circle cx="'+(cx+10)+'" cy="'+(ty-20)+'" r="'+(pr*.8).toFixed(1)+'" fill="var(--ink-3)" opacity=".28"/>';
+    s+='<text x="'+(x+10)+'" y="'+(y+22)+'" font-family="var(--f-display)" font-weight="700" font-size="18" fill="var(--ink)">'+u.id+'</text>';
+    s+='<text x="'+(x+w-10)+'" y="'+(y+21)+'" text-anchor="end" font-size="14" font-weight="700" fill="'+(st.state==='ok'?'var(--good-ink)':col)+'">'+icon+'</text>';
+    s+='<text x="'+(x+10)+'" y="'+(y+h-34)+'" font-size="10.5" fill="var(--ink-2)">'+u.name+'</text>';
+    s+='<text x="'+(x+10)+'" y="'+(y+h-12)+'" font-family="var(--f-display)" font-weight="700" font-size="22" fill="var(--ink)">'+pct(mx)+'%</text>';
+    if(st.flag)s+='<text x="'+(x+10)+'" y="'+(y+39)+'" font-size="9.5" fill="var(--accent)" font-weight="600">◆ '+st.flag+'</text>';
+    s+='</g>';
+  });
+  $('mapSvg').innerHTML=s;
+}
+
+const CH={W:720,H:300,L:44,R:20,T:12,B:28,N:72};
+function renderChart(){
+  const u=sel(),h=u.hist.slice(-CH.N),n=h.length,pw=CH.W-CH.L-CH.R,ph=CH.H-CH.T-CH.B;
+  let mxv=1;h.forEach(r=>{if(!r.missing)P.forEach(p=>{if(r.pct[p]>mxv)mxv=r.pct[p];});});
+  const ymax=Math.max(1.8,Math.ceil(mxv*1.05*5)/5);
+  const X=i=>CH.L+(n>1?i/(CH.N-1):0)*pw+(CH.N-n)/(CH.N-1)*pw*0,Y=v=>CH.T+ph-(v/ymax)*ph;
+  let s='';
+  s+='<rect x="'+CH.L+'" y="'+CH.T+'" width="'+pw+'" height="'+(Y(1)-CH.T)+'" fill="var(--crit)" opacity=".06"/>';
+  const step=ymax>2.2?1:.5;
+  for(let v=0;v<=ymax+1e-9;v+=step){s+='<line x1="'+CH.L+'" x2="'+(CH.W-CH.R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="var(--grid)"/><text x="'+(CH.L-8)+'" y="'+(Y(v)+4)+'" text-anchor="end" font-size="11" fill="var(--ink-3)" font-family="var(--f-mono)">'+pct(v)+'%</text>';}
+  // offline bands
+  let runStart=-1;
+  for(let i=0;i<=n;i++){const miss=i<n&&h[i].missing;if(miss&&runStart<0)runStart=i;if(!miss&&runStart>=0){const x0=X(runStart)-3,x1=X(i-1)+3;s+='<rect x="'+x0+'" y="'+CH.T+'" width="'+(x1-x0)+'" height="'+ph+'" fill="var(--serious)" opacity=".16"/><text x="'+(x0+4)+'" y="'+(CH.T+14)+'" font-size="10.5" fill="var(--ink-2)">held on logger</text>';runStart=-1;}}
+  s+='<line x1="'+CH.L+'" x2="'+(CH.W-CH.R)+'" y1="'+Y(1)+'" y2="'+Y(1)+'" stroke="var(--crit)" stroke-width="1.5"/>';
+  for(let i=0;i<n;i++){if((n-1-i)%12===0)s+='<text x="'+X(i)+'" y="'+(CH.H-8)+'" text-anchor="middle" font-size="11" fill="var(--ink-3)" font-family="var(--f-mono)">'+fmtT(h[i].t)+'</text>';}
+  const order=['pm','nox','so2'];
+  order.forEach(p=>{
+    let d='',pen=false;
+    h.forEach((r,i)=>{if(r.missing){pen=false;return;}d+=(pen?'L':'M')+X(i).toFixed(1)+' '+Y(r.pct[p]).toFixed(1);pen=true;});
+    s+='<path d="'+d+'" fill="none" stroke="'+COLP[p]+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+    for(let i=n-1;i>=0;i--){if(!h[i].missing){s+='<circle cx="'+X(i)+'" cy="'+Y(h[i].pct[p])+'" r="4" fill="'+COLP[p]+'" stroke="var(--surface)" stroke-width="2"/>';break;}}
+  });
+  const hv=ui.hover;
+  if(hv!=null&&hv<n){const i=n-1-hv,r=h[i],x=X(i);
+    s+='<line x1="'+x+'" x2="'+x+'" y1="'+CH.T+'" y2="'+(CH.T+ph)+'" stroke="var(--ink-3)" stroke-width="1"/>';
+    if(!r.missing)P.forEach(p=>{s+='<circle cx="'+x+'" cy="'+Y(r.pct[p])+'" r="4.5" fill="'+COLP[p]+'" stroke="var(--surface)" stroke-width="2"/>';});
+    showTip(r,x);
+  }else $('chartTip').hidden=true;
+  s+='<rect id="hit" x="'+CH.L+'" y="'+CH.T+'" width="'+pw+'" height="'+ph+'" fill="transparent" style="cursor:crosshair"/>';
+  $('chartSvg').innerHTML=s;
+  $('chartSub').textContent=u.id+' · '+u.name+'. Each parameter is shown as a share of its limit, so one axis fits all three.';
+  const rows=u.hist.slice(-12).reverse().map(r=>'<tr><td>'+fmtT(r.t)+'</td>'+(r.missing?'<td colspan="3">held on the logger</td><td>Offline</td>':'<td>'+r.raw.so2.toFixed(1)+'</td><td>'+r.raw.nox.toFixed(1)+'</td><td>'+r.raw.pm.toFixed(1)+'</td><td>'+(r.B?STL[r.B]:'')+'</td>')+'</tr>').join('');
+  $('tblBody').innerHTML=rows;
+}
+const COLP={so2:'var(--so2)',nox:'var(--nox)',pm:'var(--pm)'};
+function showTip(r,x){
+  const tip=$('chartTip'),box=$('chartBox'),bw=box.clientWidth,px=x/CH.W*bw;
+  let html='<div class="t">'+fmtDT(r.t)+(r.backfilled?' · sent after reconnecting':'')+'</div>';
+  if(r.missing)html+='<div style="margin-top:4px"><b>Held on the logger</b><div class="t">Not yet at the board</div></div>';
+  else{
+    ['so2','nox','pm'].forEach(p=>{html+='<div class="r"><span style="display:inline-flex;align-items:center;gap:6px"><i class="key" style="color:'+COLP[p]+';width:14px"></i><span style="color:var(--ink-2)">'+NM[p]+'</span></span><b class="num">'+pct(r.pct[p])+'%<span class="t"> · '+r.raw[p].toFixed(1)+'</span></b></div>';});
+    html+='<div class="t" style="margin-top:4px">'+STL[r.B]+(r.A==='frozen'?' · frozen data':'')+(r.C==='suspect'?' · possible spoofing':'')+'</div>';
+  }
+  tip.innerHTML=html;tip.hidden=false;
+  tip.style.left=Math.max(86,Math.min(bw-86,px))+'px';tip.style.top='6px';
+}
+function bindChart(){
+  const svg=$('chartSvg');
+  svg.addEventListener('pointermove',e=>{
+    const b=svg.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*CH.W,n=Math.min(CH.N,sel().hist.length);
+    const i=Math.round((x-CH.L)/(CH.W-CH.L-CH.R)*(CH.N-1));ui.hover=cl2(CH.N-1-i,0,n-1);renderChart();
+  });
+  svg.addEventListener('pointerleave',()=>{ui.hover=null;renderChart();});
+}
+const cl2=(x,a,b)=>Math.max(a,Math.min(b,x));
+/* ---------- Stages 1 to 3 ---------- */
+const REDUCE=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function buildStack(){
+  let g='';
+  for(let i=0;i<5;i++){g+='<circle r="4" cy="157" fill="var(--accent)" opacity=".85"><animate attributeName="cx" from="118" to="300" dur="2.4s" begin="-'+(i*.48)+'s" repeatCount="indefinite"/></circle>';}
+  $('gasdots').innerHTML=REDUCE?'<circle cx="170" cy="157" r="4" fill="var(--accent)"/><circle cx="230" cy="157" r="4" fill="var(--accent)"/>':g;
+}
+function renderStack(){
+  const u=sel(),r=C.latest(u);if(!r)return;
+  P.forEach(p=>{
+    const f=Math.min(1,r.raw[p]/(LIM[p]*1.5));
+    $('b-'+p).setAttribute('width',(292*f).toFixed(1));
+    $('ma-'+p).textContent=(4+16*f).toFixed(1)+' mA';
+    $('v-'+p).textContent=r.raw[p].toFixed(1)+' mg/Nm³ ('+pct(r.pct[p])+'%)';
+  });
+  let tm=0;P.forEach(p=>{if(r.truePct[p]>tm)tm=r.truePct[p];});
+  let g='';
+  for(let i=0;i<5;i++){
+    const cx=107+i*16+Math.sin((S.ticks+i*2)/3)*5,cy=42-i*16,rad=(6+i*3.4)*(.55+tm*.5);
+    g+='<circle cx="'+cx.toFixed(1)+'" cy="'+cy+'" r="'+rad.toFixed(1)+'" fill="'+(tm>1?'var(--serious)':'var(--ink-3)')+'" opacity="'+((.5-i*.07)*(.45+tm*.55)).toFixed(2)+'"/>';
+  }
+  if(u.mode==='spoof')g+='<text x="190" y="30" font-size="12" fill="var(--accent)" font-weight="600">The plume is heavy, the signals are not.</text>';
+  $('plume').innerHTML=g;
+  const active=document.activeElement===$('loadSlider');
+  if(u.loadManual==null&&!active)$('loadSlider').value=Math.round(u.load*100);
+  $('loadVal').textContent=Math.round(u.load*100)+'%';
+}
+
+function renderLogger(){
+  const u=sel(),nb=u.buffer.length;
+  $('bufFill').setAttribute('width',(180*Math.min(1,nb/60)).toFixed(1));
+  const recent=S.ticks-u.flushTick<10&&u.flushed>0;
+  $('bufTxt').textContent=nb?(nb+' record'+(nb>1?'s':'')+' held, '+nb*TICK+' min'):(recent?('Sent '+u.flushed+' stored records, no gap'):'0 records waiting');
+  $('linkLed').setAttribute('fill',u.link?'var(--good)':'var(--crit)');
+  $('linkTxt').textContent=u.link?'uplink up':'uplink down';
+  $('uplinkLine').setAttribute('stroke-dasharray',u.link?'':'4 7');
+  const h=u.hist.slice(-36);let s='';
+  h.forEach((r,i)=>{
+    const x=i*18+1;
+    if(r.missing)s+='<rect x="'+x+'" y="4" width="16" height="30" rx="3" fill="var(--serious)" opacity=".4" stroke="var(--serious)"/>';
+    else if(r.backfilled)s+='<rect x="'+(x+1)+'" y="5" width="14" height="28" rx="3" fill="var(--surface)" stroke="var(--h4)" stroke-width="2"/>';
+    else s+='<rect x="'+x+'" y="4" width="16" height="30" rx="3" fill="var(--h4)"/>';
+  });
+  $('strip').innerHTML=s;
+  $('linkBtn').textContent=u.link?'Cut the uplink':'Restore the uplink';
+  $('linkNote').textContent=u.link?'Uplink is carrying data.':(nb+' records stored safely on the logger. They go out as soon as the uplink returns.');
+}
+
+function buildTransport(){
+  let s='';
+  s+='<rect x="8" y="35" width="120" height="80" rx="10" fill="var(--surface-2)" stroke="var(--accent)" stroke-width="2"/><text x="68" y="70" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">IoT logger</text><text x="68" y="90" text-anchor="middle" font-size="11" fill="var(--ink-3)" font-family="var(--f-mono)" id="tx-id">S3</text>';
+  s+='<rect x="512" y="35" width="120" height="80" rx="10" fill="var(--surface-2)" stroke="var(--ink-3)" stroke-width="2"/><text x="572" y="70" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">SPCB cloud</text><text x="572" y="90" text-anchor="middle" font-size="11" fill="var(--ink-3)" font-family="var(--f-mono)">government servers</text>';
+  s+='<rect x="128" y="62" width="384" height="26" rx="13" fill="var(--accent-soft)"/><text x="320" y="79" text-anchor="middle" font-size="11.5" fill="var(--ink)" font-family="var(--f-mono)" id="tx-proto">HTTPS POST · encrypted with TLS</text>';
+  s+='<g id="tx-pk">';
+  for(let i=0;i<4;i++)s+=REDUCE?'<rect x="'+(170+i*80)+'" y="69" width="16" height="12" rx="2" fill="var(--accent)"/>':'<rect y="69" width="16" height="12" rx="2" fill="var(--accent)"><animate attributeName="x" from="132" to="496" dur="3.2s" begin="-'+(i*.8)+'s" repeatCount="indefinite"/></rect>';
+  s+='</g>';
+  s+='<g id="tx-x" hidden><circle cx="320" cy="75" r="16" fill="var(--crit)"/><path d="M313 68 L327 82 M327 68 L313 82" stroke="#fff" stroke-width="2.5"/></g>';
+  s+='<text x="320" y="130" text-anchor="middle" font-size="12" fill="var(--ink-2)" id="tx-note">Records leave the logger every 5 minutes.</text>';
+  $('transSvg').innerHTML=s;
+}
+function renderTransport(){
+  const u=sel(),r=C.latest(u);if(!r)return;
+  $('tx-id').textContent=u.id;
+  $('tx-pk').style.display=u.link?'':'none';$('tx-x').hidden=u.link;
+  $('tx-note').textContent=u.link?'Records leave the logger every 5 minutes.':'No route to the board. The logger keeps storing records.';
+  const rest=ui.proto==='rest';
+  $('tx-proto').textContent=rest?'HTTPS POST · encrypted with TLS':'MQTT publish · encrypted with TLS';
+  $('protoNote').textContent=rest?'A POST per reading, JSON body':'A message on a topic, light on bandwidth';
+  const ts=new Date(r.t).toISOString();
+  const so=r.raw.so2.toFixed(1),nx=r.raw.nox.toFixed(1),pm=r.raw.pm.toFixed(1),ld=Math.round(r.load*100);
+  $('payload').textContent=rest
+   ?'// Example message, not a real endpoint\nPOST /api/cems/readings HTTP/1.1\nContent-Type: application/json\n\n{\n  "station_id": "'+u.id+'",\n  "timestamp": "'+ts+'",\n  "so2_mg_nm3": '+so+',\n  "nox_mg_nm3": '+nx+',\n  "pm_mg_nm3": '+pm+',\n  "load_pct": '+ld+'\n}'
+   :'// Example message, not a real broker\nPUBLISH  topic: cems/'+u.id+'/readings\n\n{"ts":"'+ts+'","so2":'+so+',"nox":'+nx+',"pm":'+pm+',"load":'+ld+'}';
+}
+/* ---------- Stage 4: three-tier validation ---------- */
+function renderValidation(){
+  const u=sel(),r=C.latest(u);if(!r)return;
+  const last=u.hist[u.hist.length-1],h24=u.hist.slice(-24);
+  // Tier 1
+  let fz=0,gap=0,cells='';
+  h24.forEach((q,i)=>{
+    let f='var(--good)',o=1;
+    if(q.missing){f='var(--serious)';o=.45;gap++;}
+    else if(q.A==='frozen'){f='var(--crit)';fz++;}
+    else if(q.A==='maint'){f='var(--warn)';}
+    cells+='<rect x="'+(i*10+1)+'" y="6" width="8" height="24" rx="2" fill="'+f+'" opacity="'+o+'"/>';
+  });
+  $('vA').innerHTML=cells;
+  if(last.missing)setPill($('pA'),'bad','Gap, awaiting logger');
+  else if(r.A==='frozen')setPill($('pA'),'bad','Frozen data');
+  else if(r.A==='maint')setPill($('pA'),'watch','Frozen, maintenance');
+  else setPill($('pA'),'ok','Complete');
+  $('cA').textContent=fz+' frozen · '+gap+' missing in last 24 records';
+  // Tier 2
+  let bars='';
+  const x0=38,sc=186/1.8;
+  P.forEach((p,i)=>{
+    const y=6+i*21,v=r.pct[p];
+    bars+='<text x="0" y="'+(y+10)+'" font-size="11" fill="var(--ink-2)">'+NM[p]+'</text><rect x="'+x0+'" y="'+y+'" width="186" height="12" rx="2" fill="var(--surface-2)"/><rect x="'+x0+'" y="'+y+'" width="'+Math.max(2,Math.min(186,v*sc)).toFixed(1)+'" height="12" rx="2" fill="'+COLP[p]+'"/><text x="238" y="'+(y+10)+'" text-anchor="end" font-size="10.5" fill="var(--ink-2)" font-family="var(--f-mono)">'+pct(v)+'%</text>';
+  });
+  bars+='<line x1="'+(x0+sc)+'" x2="'+(x0+sc)+'" y1="2" y2="68" stroke="var(--crit)" stroke-width="2"/>';
+  $('vB').innerHTML=bars;
+  if(r.B==='exceed')setPill($('pB'),'bad','Over limit · warning');
+  else if(r.B==='watch')setPill($('pB'),'watch','Watch');
+  else setPill($('pB'),'ok','Within limit');
+  let ov=0;h24.forEach(q=>{if(!q.missing&&q.B==='exceed')ov++;});
+  $('cB').textContent=ov+' of last 24 records over limit';
+  // Tier 3
+  const pts=h24.filter(q=>!q.missing);
+  let ymax=1.2;pts.forEach(q=>{ymax=Math.max(ymax,q.act,q.exp);});
+  const px=i=>4+i/Math.max(1,pts.length-1)*232,py=v=>66-(v/ymax)*60;
+  let da='',de='';
+  pts.forEach((q,i)=>{da+=(i?'L':'M')+px(i).toFixed(1)+' '+py(q.act).toFixed(1);de+=(i?'L':'M')+px(i).toFixed(1)+' '+py(q.exp).toFixed(1);});
+  $('vC').innerHTML='<line x1="4" x2="236" y1="66" y2="66" stroke="var(--grid)"/><path d="'+de+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/><path d="'+da+'" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+  if(r.C==='suspect')setPill($('pC'),'flag','Possible spoofing');else setPill($('pC'),'ok','Plausible');
+  $('cC').textContent='Reported is '+pct(r.ratio)+'% of the level expected at '+Math.round(r.load*100)+'% load';
+  // verdict
+  let cls='ok',lab='Accepted',txt='All three tiers passed. The record is stored as reported.';
+  if(last.missing){cls='watch';lab='Waiting';txt='Nothing has arrived since the uplink was cut. The board is waiting for the logger to send its stored records.';}
+  else if(r.C==='suspect'){cls='flag';lab='Flagged for inspection';txt='Readings are far below what this stack’s production load and history suggest. That pattern is typical of data spoofing.';}
+  else if(r.A==='frozen'){cls='bad';lab='Frozen data';txt='The same values keep repeating. Mark the analyser as under maintenance if this is planned.';}
+  else if(r.A==='maint'){cls='watch';lab='Accepted with note';txt='Frozen data is excused because the analyser is marked as under maintenance.';}
+  else if(r.B==='exceed'){cls='bad';lab='Warning stage';txt='Limit breached. The enforcement clock is running: '+u.consec*TICK+' of '+S.win+' min.';}
+  else if(r.B==='watch'){cls='watch';lab='Accepted, close to limit';txt='Within the standard but above 85% of it for '+NM[r.worst]+'.';}
+  $('verdict').innerHTML='<span class="pill '+cls+'">'+lab+'</span><span>'+txt+'</span>';
+}
+
+/* ---------- Stage 5: enforcement loop ---------- */
+const fmtWin=m=>m<60?m+' min':(m/60)+' h';
+function alertText(a){
+  if(a.type==='integrity')return a.uid+' '+a.uname+': data integrity flag. Readings are far below what the production load and history suggest.';
+  return a.uid+' '+a.uname+': '+NM[a.worst]+' above limit for '+a.min+' min, peak '+pct(a.mx)+'% of limit.';
+}
+function renderEnforce(){
+  const u=sel(),mins=u.consec*TICK,f=Math.min(1,mins/S.win),circ=2*Math.PI*70;
+  const col=mins===0?'var(--good)':f>=1?'var(--crit)':f>=.7?'var(--serious)':'var(--warn)';
+  $('ring').innerHTML='<circle cx="90" cy="90" r="70" fill="none" stroke="var(--surface-2)" stroke-width="14"/><circle cx="90" cy="90" r="70" fill="none" stroke="'+col+'" stroke-width="14" stroke-linecap="round" stroke-dasharray="'+(circ*f).toFixed(1)+' '+circ.toFixed(1)+'" transform="rotate(-90 90 90)"/><text x="90" y="92" text-anchor="middle" font-family="var(--f-display)" font-weight="700" font-size="40" fill="var(--ink)">'+mins+'</text><text x="90" y="114" text-anchor="middle" font-size="12" fill="var(--ink-3)" font-family="var(--f-mono)">of '+S.win+' min</text>';
+  $('winVal').textContent=fmtWin(S.win);
+  if(u.alertOn){setPill($('enfState'),'bad','Alert sent');$('enfNote').textContent=u.id+' has been over the limit for '+mins+' min. SMS and e-mail went out.';}
+  else if(mins>0){setPill($('enfState'),'watch','Warning stage');$('enfNote').textContent=Math.max(0,S.win-mins)+' more minutes over limit before an alert is sent.';}
+  else{setPill($('enfState'),'ok','Clear');$('enfNote').textContent='No continuous exceedance on this stack.';}
+  const a=S.alerts[0];let sms,mail;
+  if(a){
+    const body=alertText(a)+' Time: '+fmtT(a.t)+'.';
+    sms='<div class="eyebrow">CEMS-SPCB</div><div class="bubble"><b>ALERT #'+a.id+'</b> '+body+' Check the stack and log corrective action.</div><div class="eyebrow" style="align-self:flex-end">'+fmtT(a.t)+(a.late?' · delivered after backfill':'')+'</div>';
+    mail='<div class="eyebrow">E-mail</div><div class="bubble"><div style="color:var(--ink-3)">To: environment officer, SPCB regional officer, inspection team</div><div style="margin:6px 0"><b>[CEMS] '+(a.type==='exceed'?'Exceedance':'Data integrity')+' alert #'+a.id+', '+a.uid+' '+a.uname+'</b></div><div>'+body+'</div><div style="margin-top:6px;color:var(--ink-2)">Please review the stack and record corrective action in the portal.</div></div>';
+  }else{
+    sms='<div class="eyebrow">Example, no alert yet</div><div class="bubble"><b>ALERT</b> S3 Steel furnace: SO₂ above limit for 120 min, peak 146% of limit. Check the stack and log corrective action.</div>';
+    mail='<div class="eyebrow">Example, no alert yet</div><div class="bubble"><div style="color:var(--ink-3)">To: environment officer, SPCB regional officer, inspection team</div><div style="margin:6px 0"><b>[CEMS] Exceedance alert, S3 Steel furnace</b></div><div>SO₂ above limit for 120 min, peak 146% of limit.</div></div>';
+  }
+  $('msgBody').innerHTML=ui.msg==='sms'?sms:mail;
+  $('alog').innerHTML=S.alerts.length?S.alerts.slice(0,8).map(x=>'<div class="a"><span class="mono" style="font-size:11px;color:var(--ink-3)">'+fmtT(x.t)+'</span><span>'+alertText(x)+'</span><span class="pill '+(x.type==='exceed'?'bad':'flag')+'">'+(x.type==='exceed'?'Exceedance':'Integrity')+'</span></div>').join(''):'<div class="empty">No alerts yet. Choose Process upset for a stack and wait for the clock to fill.</div>';
+}
+
+/* ---------- Hotspots ---------- */
+function renderHot(){
+  const us=S.units,cw=25,x0=150,y0=30,rh=28;
+  let s='';
+  const first=C.hourly(us[0]);
+  first.forEach((c,k)=>{if(k%4===0&&c.t)s+='<text x="'+(x0+k*(cw+1)+cw/2)+'" y="18" text-anchor="middle" font-size="11" fill="var(--ink-3)" font-family="var(--f-mono)">'+fmtT(c.t)+'</text>';});
+  const idx=v=>v<.4?0:v<.6?1:v<.8?2:v<1?3:v<1.2?4:v<1.5?5:6;
+  us.forEach((u,j)=>{
+    const y=y0+j*rh,on=u===sel();
+    s+='<text x="8" y="'+(y+17)+'" font-size="12.5" fill="var(--ink)" font-weight="'+(on?'700':'400')+'">'+u.id+' '+u.name+'</text>';
+    C.hourly(u).forEach((c,k)=>{
+      const x=x0+k*(cw+1);
+      s+='<rect x="'+x+'" y="'+y+'" width="'+cw+'" height="'+(rh-3)+'" rx="3" fill="'+(c.has?'var(--h'+idx(c.mx)+')':'var(--surface-2)')+'"><title>'+u.id+' · '+fmtT(c.t)+' · peak '+pct(c.mx)+'% of limit</title></rect>';
+      if(c.breach)s+='<circle cx="'+(x+cw-6)+'" cy="'+(y+6)+'" r="3.2" fill="var(--crit)" stroke="var(--surface)" stroke-width="1.5"/>';
+    });
+  });
+  $('heat').innerHTML=s;
+  const labs=['<40%','40–60','60–80','80–100','100–120','120–150','150%+'];
+  $('heatLegend').innerHTML=labs.map((l,i)=>'<span><i class="sw" style="background:var(--h'+i+')"></i>'+l+'</span>').join('')+'<span><i class="sw" style="background:var(--crit);border-radius:50%"></i>Breach in that hour</span>';
+  const rk=us.map(u=>({u:u,m:C.exceedMin(u)})).sort((a,b)=>b.m-a.m);
+  const tot=rk.reduce((a,x)=>a+x.m,0),mx=Math.max(1,rk[0].m),nz=rk.filter(x=>x.m>0).length;
+  $('rank').innerHTML=rk.map(x=>'<span>'+x.u.id+' '+x.u.name+'</span><div class="bar-t"><i style="width:'+(x.m/mx*100).toFixed(1)+'%"></i></div><b class="num">'+x.m+' min</b>').join('');
+  $('rankSub').textContent=nz+' of '+us.length+' stacks went over the limit. '+tot+' minutes in total.';
+  const n=+$('teams').value;$('teamsVal').textContent=n;
+  const top=rk.slice(0,n).reduce((a,x)=>a+x.m,0),tc=tot?Math.round(top/tot*100):0,bc=Math.round(n/us.length*100);
+  $('covT').style.width=tc+'%';$('covTt').textContent=tc+'%';$('covB').style.width=bc+'%';$('covBt').textContent=bc+'%';
+  $('takeaway').textContent=tot?('Visiting the worst '+n+' stack'+(n>1?'s':'')+' first reaches '+tc+'% of all time spent over the limit. Visiting '+n+' stack'+(n>1?'s':'')+' picked evenly reaches about '+bc+'%.'):'No stack has been over the limit in the last 24 hours.';
+}
+/* ---------- Wiring ---------- */
+function renderAll(force){
+  renderBar();renderTiles();renderMap();renderChart();
+  if(force||ui.vis[1])renderStack();
+  if(force||ui.vis[2])renderLogger();
+  if(force||ui.vis[3])renderTransport();
+  if(force||ui.vis[4])renderValidation();
+  if(force||ui.vis[5])renderEnforce();
+  if(force||ui.vis.hot)renderHot();
+}
+function syncControls(){
+  const u=sel();
+  $('unitSel').value=u.id;
+  document.querySelectorAll('#scen .chip').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===u.mode)));
+  $('linkSw').checked=u.link;$('linkLbl').textContent=u.link?'Uplink connected':'Uplink cut';
+  $('maint').checked=u.maint;
+  $('loadAuto').checked=u.loadManual==null;
+  if(u.loadManual!=null)$('loadSlider').value=Math.round(u.loadManual*100);
+}
+function setLinkUI(on){C.setLink(sel(),on);syncControls();renderAll(true);}
+function loop(){
+  if(ui.running){C.tick();renderAll();}
+  ui.timer=setTimeout(loop,600/ui.speed);
+}
+function initUI(){
+  $('unitSel').innerHTML=S.units.map(u=>'<option value="'+u.id+'">'+u.id+' · '+u.name+'</option>').join('');
+  buildStack();buildTransport();bindChart();
+  $('unitSel').addEventListener('change',e=>{C.selectUnit(e.target.value);ui.hover=null;syncControls();renderAll(true);});
+  $('mapSvg').addEventListener('click',e=>{const g=e.target.closest('.unit');if(g){C.selectUnit(g.dataset.id);ui.hover=null;syncControls();renderAll(true);}});
+  $('mapSvg').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){const g=e.target.closest('.unit');if(g){e.preventDefault();C.selectUnit(g.dataset.id);syncControls();renderAll(true);}}});
+  $('scen').addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;C.setMode(sel(),b.dataset.mode);syncControls();renderAll(true);});
+  $('linkSw').addEventListener('change',e=>setLinkUI(e.target.checked));
+  $('linkBtn').addEventListener('click',()=>setLinkUI(!sel().link));
+  $('maint').addEventListener('change',e=>{sel().maint=e.target.checked;renderAll(true);});
+  $('loadSlider').addEventListener('input',e=>{const u=sel();u.loadManual=+e.target.value/100;$('loadAuto').checked=false;$('loadVal').textContent=e.target.value+'%';});
+  $('loadAuto').addEventListener('change',e=>{const u=sel();u.loadManual=e.target.checked?null:+$('loadSlider').value/100;});
+  $('protoSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;ui.proto=b.dataset.p;document.querySelectorAll('#protoSeg button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderTransport();});
+  $('msgSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;ui.msg=b.dataset.m;document.querySelectorAll('#msgSeg button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderEnforce();});
+  $('winSlider').addEventListener('input',e=>{S.win=+e.target.value;renderAll(true);});
+  $('teams').addEventListener('input',renderHot);
+  $('speed').addEventListener('change',e=>{ui.speed=+e.target.value;});
+  $('playBtn').addEventListener('click',()=>{ui.running=!ui.running;$('playBtn').textContent=ui.running?'Pause':'Resume';$('bar').classList.toggle('paused',!ui.running);});
+  $('resetBtn').addEventListener('click',()=>{C.reset();ui.hover=null;$('winSlider').value=S.win;initSelectors();syncControls();renderAll(true);});
+  setupRail();
+  syncControls();renderAll(true);
+  loop();
+}
+function initSelectors(){$('unitSel').innerHTML=S.units.map(u=>'<option value="'+u.id+'">'+u.id+' · '+u.name+'</option>').join('');}
+
+/* rail + visibility */
+function setupRail(){
+  const secs=[1,2,3,4,5].map(n=>$('s'+n)),lis=[].slice.call(document.querySelectorAll('#railList li'));
+  const io=new IntersectionObserver(es=>{es.forEach(en=>{const n=en.target.dataset.stage||'hot';ui.vis[n]=en.isIntersecting;if(en.isIntersecting)renderAll(true);});},{rootMargin:'200px 0px'});
+  secs.forEach(s=>io.observe(s));io.observe($('heat'));
+  function upd(){
+    const vh=window.innerHeight;let a=1;
+    secs.forEach((s,i)=>{if(s.getBoundingClientRect().top<=vh*.42)a=i+1;});
+    lis.forEach((li,i)=>{li.classList.toggle('on',i+1===a);li.classList.toggle('done',i+1<a);});
+    const li=lis[a-1],ol=$('railList');
+    if(window.innerWidth>980&&li){
+      $('railFill').style.height=Math.max(0,li.offsetTop+20-14)+'px';
+      ol.style.setProperty('--rl',(lis[lis.length-1].offsetTop+20-14)+'px');
+    }
+    ui.stage=a;
+  }
+  let q=false;
+  window.addEventListener('scroll',()=>{if(q)return;q=true;requestAnimationFrame(()=>{q=false;upd();});},{passive:true});
+  window.addEventListener('resize',upd);
+  lis.forEach(li=>li.addEventListener('click',()=>{$('s'+li.dataset.stage).scrollIntoView({behavior:REDUCE?'auto':'smooth',block:'start'});}));
+  upd();
+}
+initUI();
+</script>
+
+</body></html>
